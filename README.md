@@ -10,11 +10,26 @@ Here's an example of what you can do when it's connected to Claude.
 
 ![WhatsApp MCP](./example-use.png)
 
-> To get updates on this and other projects I work on [enter your email here](https://docs.google.com/forms/d/1rTF9wMBTN0vPfzWuQa2BjfGKdKIpTbyeKxhPMcEzgyI/preview)
-
 > *Caution:* as with many MCP servers, the WhatsApp MCP is subject to [the lethal trifecta](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/). This means that project injection could lead to private data exfiltration.
 
-## Installation
+## Fork notice
+
+This is a fork of [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp) that packages the project as an installable Home Assistant app. All credit for the original WhatsApp bridge and MCP server implementation goes to [Luke Harries](https://github.com/lharries). This fork is distributed under the same [MIT license](./LICENSE) as the original.
+
+## Installation as a Home Assistant App
+
+[![Add repository to my Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2F10bn%2Fwhatsapp-mcp-hass-addon)
+
+1. Click the badge above (or add `https://github.com/10bn/whatsapp-mcp-hass-addon` as a repository under Settings > Add-ons > App store > ⋮ > Repositories).
+2. Install the **WhatsApp MCP** app, set the `mcp_auth_token` option, then start it.
+3. Open the app's **Log** tab and scan the QR code with WhatsApp on your phone (Settings > Linked Devices).
+4. Point your MCP client at `http://<home-assistant-host>:8081/mcp` with header `Authorization: Bearer <mcp_auth_token>`.
+
+Full options reference, security notes, and troubleshooting: see [DOCS.md](./DOCS.md).
+
+## Manual / local installation
+
+The sections below describe running the two components directly on your machine (e.g. for use with Claude Desktop or Cursor over stdio) instead of as a Home Assistant app.
 
 ### Prerequisites
 

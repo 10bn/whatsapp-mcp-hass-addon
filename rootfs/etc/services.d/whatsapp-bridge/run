@@ -1,0 +1,19 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Start the Go WhatsApp bridge (whatsmeow client + local REST API).
+# Session credentials and the message history SQLite databases are kept on
+# the persistent /data volume so re-pairing isn't needed after a restart.
+# s6-overlay docs: https://github.com/just-containers/s6-overlay
+# ==============================================================================
+
+mkdir -p /data/store
+
+export WHATSAPP_STORE_DIR="/data/store"
+export WHATSAPP_PORT="8080"
+
+cd /app/whatsapp-bridge || bashio::exit.nok "Could not change to /app/whatsapp-bridge"
+
+bashio::log.info "Starting WhatsApp bridge..."
+bashio::log.info "If this is the first run, a QR code will appear below - scan it with the WhatsApp app on your phone (Settings > Linked Devices)."
+
+exec ./whatsapp-bridge
