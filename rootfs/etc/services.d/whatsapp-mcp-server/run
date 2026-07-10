@@ -1,0 +1,46 @@
+#!/usr/bin/with-contenv bashio
+# ==============================================================================
+# Start the Python MCP server over streamable-http so it can be reached by
+# an MCP client elsewhere on the network (a stdio server would only be
+# reachable by a process that spawns it locally, which doesn't work for a
+# long-running app service).
+# s6-overlay docs: https://github.com/just-containers/s6-overlay
+# ==============================================================================
+
+# Wait for the WhatsApp bridge's REST API to accept connections before
+# starting the MCP server, which talks to it on every tool call.
+wait_for_bridge() {
+    local timeout=120
+    for ((i = 0; i < timeout; i++)); do
+        if (echo >"/dev/tcp/localhost/8080") >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
+bashio::log.info "Waiting for the WhatsApp bridge to become ready..."
+if ! wait_for_bridge; then
+    bashio::log.warning "Timed out waiting for the WhatsApp bridge on port 8080; starting the MCP server anyway."
+fi
+
+declare mcp_auth_token=""
+if bashio::config.has_value 'mcp_auth_token'; then
+    mcp_auth_token=$(bashio::config 'mcp_auth_token')
+else
+    bashio::log.warning "mcp_auth_token is not set. The WhatsApp MCP server will be reachable on the network without authentication. Set the mcp_auth_token option in the app configuration to secure it."
+fi
+
+export WHATSAPP_MESSAGES_DB_PATH="/data/store/messages.db"
+export WHATSAPP_BRIDGE_URL="http://localhost:8080/api"
+export MCP_TRANSPORT="streamable-http"
+export MCP_HOST="0.0.0.0"
+export MCP_PORT="8081"
+export MCP_AUTH_TOKEN="${mcp_auth_token}"
+
+cd /app/whatsapp-mcp-server || bashio::exit.nok "Could not change to /app/whatsapp-mcp-server"
+
+bashio::log.info "Starting WhatsApp MCP server (streamable-http) on port ${MCP_PORT}..."
+
+exec .venv/bin/python main.py

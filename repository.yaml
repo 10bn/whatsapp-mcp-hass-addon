@@ -1,0 +1,4 @@
+# https://developers.home-assistant.io/docs/apps/repository#repository-configuration
+name: WhatsApp MCP
+url: "https://github.com/10bn/whatsapp-mcp-hass-addon"
+maintainer: 10bn <max.uhsadel@gmail.com>

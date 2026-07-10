@@ -1,3 +1,4 @@
+import os
 from typing import List, Dict, Any, Optional
 from mcp.server.fastmcp import FastMCP
 from whatsapp import (
@@ -16,7 +17,11 @@ from whatsapp import (
 )
 
 # Initialize FastMCP server
-mcp = FastMCP("whatsapp")
+mcp = FastMCP(
+    "whatsapp",
+    host=os.environ.get("MCP_HOST", "0.0.0.0"),
+    port=int(os.environ.get("MCP_PORT", "8081")),
+)
 
 @mcp.tool()
 def search_contacts(query: str) -> List[Dict[str, Any]]:
@@ -246,6 +251,46 @@ def download_media(message_id: str, chat_jid: str) -> Dict[str, Any]:
             "message": "Failed to download media"
         }
 
+def _run_streamable_http() -> None:
+    """Run the server over streamable-http, optionally gated by a bearer token.
+
+    A stdio MCP server is only reachable by a process that spawns it locally.
+    Once exposed over the network (e.g. as a Home Assistant app service) it
+    becomes reachable by anything on the LAN unless we require a token.
+    """
+    import uvicorn
+    from starlette.applications import Starlette
+    from starlette.middleware import Middleware
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    auth_token = os.environ.get("MCP_AUTH_TOKEN", "").strip()
+
+    class BearerAuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            expected = f"Bearer {auth_token}"
+            if request.headers.get("authorization") != expected:
+                return JSONResponse({"error": "Unauthorized"}, status_code=401)
+            return await call_next(request)
+
+    app: Starlette = mcp.streamable_http_app()
+    if auth_token:
+        app.add_middleware(BearerAuthMiddleware)
+    else:
+        print(
+            "WARNING: MCP_AUTH_TOKEN is not set. The WhatsApp MCP server is "
+            "reachable by anyone who can reach this port on the network, "
+            "without authentication.",
+            flush=True,
+        )
+
+    uvicorn.run(app, host=mcp.settings.host, port=mcp.settings.port)
+
+
 if __name__ == "__main__":
-    # Initialize and run the server
-    mcp.run(transport='stdio')
+    transport = os.environ.get("MCP_TRANSPORT", "stdio").strip().lower()
+    if transport == "streamable-http":
+        _run_streamable_http()
+    else:
+        mcp.run(transport="stdio")
