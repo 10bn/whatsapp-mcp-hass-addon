@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.1
+
+- Fix `Client outdated (405) connect failure` on startup: the pinned
+  `whatsmeow` dependency was from March 2025 and presented a WhatsApp Web
+  protocol version WhatsApp's servers now reject. Bumped `whatsmeow` (and
+  its transitive dependencies) to a current version, and updated the five
+  call sites whose signatures gained a `context.Context` parameter
+  (`client.Download`, `sqlstore.New`, `container.GetFirstDevice`,
+  `client.GetGroupInfo`, `client.Store.Contacts.GetContact`).
+- Bump the Dockerfile's Go builder stage from `golang:1.24-alpine` to
+  `golang:1.25-alpine` to match the `go 1.25.0` directive the whatsmeow
+  bump pulled into `go.mod` (avoids relying on an auto-downloaded
+  toolchain during the image build).
+
 ## 1.0.0
 
 - Package this project as an installable Home Assistant app (`config.yaml`,

@@ -4,7 +4,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/base:3.23
 # Stage 1: compile the Go WhatsApp bridge (go-sqlite3 needs CGO, so we
 # build on musl/Alpine to stay ABI-compatible with the HA base image).
 # ------------------------------------------------------------------
-FROM golang:1.24-alpine AS bridge-builder
+FROM golang:1.25-alpine AS bridge-builder
 
 RUN apk add --no-cache gcc musl-dev
 
