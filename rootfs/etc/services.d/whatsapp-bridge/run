@@ -8,12 +8,25 @@
 
 mkdir -p /data/store
 
+declare mcp_auth_token=""
+if bashio::config.has_value 'mcp_auth_token'; then
+    mcp_auth_token=$(bashio::config 'mcp_auth_token')
+fi
+
 export WHATSAPP_STORE_DIR="/data/store"
 export WHATSAPP_PORT="8080"
+export WHATSAPP_QR_PORT="8082"
+# Reuse the app's single shared secret to gate the pairing QR image too,
+# rather than introducing a second token users have to manage.
+export WHATSAPP_QR_TOKEN="${mcp_auth_token}"
 
 cd /app/whatsapp-bridge || bashio::exit.nok "Could not change to /app/whatsapp-bridge"
 
 bashio::log.info "Starting WhatsApp bridge..."
 bashio::log.info "If this is the first run, a QR code will appear below - scan it with the WhatsApp app on your phone (Settings > Linked Devices)."
+bashio::log.info "If the QR code doesn't render properly in this log viewer, a scannable image is served at http://<home-assistant-host>:8082/qr.png while pairing is in progress."
+if [ -z "${mcp_auth_token}" ]; then
+    bashio::log.warning "mcp_auth_token is not set, so the QR image endpoint above is unauthenticated while pairing - anyone on your network could load it during that window."
+fi
 
 exec ./whatsapp-bridge

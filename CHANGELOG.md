@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0
+
+- Serve the WhatsApp pairing QR code as a proper PNG image
+  (`http://<home-assistant-host>:8082/qr.png`) in addition to the ASCII-art
+  QR code printed to the log, which often renders unreadably in a
+  browser-based log viewer (wrapped/mangled half-block characters). The
+  image server starts immediately at bridge startup - unlike the main REST
+  API, which only starts after a successful connection, too late to help
+  with pairing - and is gated by the same `mcp_auth_token` (as a `?token=`
+  query parameter) so it doesn't introduce an unauthenticated way to hijack
+  pairing beyond what the existing log-viewer QR code already exposes.
+- Expose the new port 8082 in `config.yaml`/`translations/en.yaml`, and pass
+  `mcp_auth_token` into the bridge's run script (`WHATSAPP_QR_TOKEN`) so it
+  can gate the endpoint.
+
 ## 1.0.1
 
 - Fix `Client outdated (405) connect failure` on startup: the pinned

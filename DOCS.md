@@ -11,6 +11,11 @@ app:
   over **streamable-http** instead of stdio, so it can be reached by an MCP
   client anywhere on your network, on port 8081.
 
+The Go bridge also serves the WhatsApp pairing QR code as a PNG image on
+port 8082 while a pairing is in progress, as an alternative to the ASCII-art
+QR code printed to the log (which often renders unreadably in a
+browser-based log viewer, depending on font/line-height).
+
 Both processes run continuously under s6-overlay for as long as the app is
 started.
 
@@ -25,6 +30,10 @@ started.
    printed there - scan it with WhatsApp on your phone under
    **Settings > Linked Devices**. You have about 3 minutes before the QR
    code expires; restart the app to get a new one if it does.
+   If the ASCII QR code in the log is hard to scan (common in browser-based
+   log viewers), open `http://<home-assistant-host>:8082/qr.png` instead -
+   add `?token=<mcp_auth_token>` to the URL if you set that option. This
+   only responds while a pairing QR is active; it 404s once you're paired.
 5. Once paired, point your MCP client at:
    `http://<home-assistant-host>:8081/mcp`
    with header `Authorization: Bearer <mcp_auth_token>`.
@@ -51,13 +60,23 @@ to the internet (e.g. via router port-forwarding).
 
 ## Network / Security notes
 
-- Port **8081/tcp** (the MCP server) is the only port this app exposes.
-  Treat it like a credential-bearing API: only reachable by devices/services
-  you trust, ideally not exposed outside your LAN, and always with
-  `mcp_auth_token` set.
-- Port 8080 (the Go bridge's internal REST API) is intentionally **not**
-  exposed by this app - it has no authentication of its own and is only
-  meant to be called by the MCP server inside the same container.
+- Port **8081/tcp** (the MCP server) is a credential-bearing API: only
+  reachable by devices/services you trust, ideally not exposed outside your
+  LAN, and always with `mcp_auth_token` set.
+- Port **8082/tcp** (the pairing QR code image) is gated by the same
+  `mcp_auth_token`, passed as `?token=<mcp_auth_token>` in the URL. If you
+  leave `mcp_auth_token` empty, this endpoint is also unauthenticated for as
+  long as a pairing QR is active (a few minutes, typically only during first
+  setup) - anyone who can reach it on your network during that window could
+  load the QR code and potentially link their own device instead of yours.
+  This isn't materially different from the existing risk of anyone with
+  access to the app's Log tab seeing the same QR code as ASCII art; it just
+  widens *who* can see it, from "logged into Home Assistant" to "on your
+  LAN", while no token is set.
+- Port 8080 (the Go bridge's internal REST API used for sending/downloading
+  messages) is intentionally **not** exposed by this app - it has no
+  authentication of its own and is only meant to be called by the MCP
+  server inside the same container.
 - WhatsApp session credentials and your full message history (including
   media metadata) are stored unencrypted in SQLite under `/data/store`. This
   data is only as safe as your Home Assistant host and backups.

@@ -15,11 +15,13 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/mdp/qrterminal"
+	"rsc.io/qr"
 
 	"bytes"
 
@@ -52,6 +54,82 @@ func restPort() int {
 		}
 	}
 	return 8080
+}
+
+// qrPort returns the TCP port the pairing QR image server listens on.
+// Defaults to 8082 but can be overridden via WHATSAPP_QR_PORT.
+func qrPort() int {
+	if v := os.Getenv("WHATSAPP_QR_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			return p
+		}
+	}
+	return 8082
+}
+
+// qrToken returns the shared secret required to fetch the pairing QR image,
+// if any is configured, via WHATSAPP_QR_TOKEN.
+func qrToken() string {
+	return os.Getenv("WHATSAPP_QR_TOKEN")
+}
+
+// currentQRPNG holds the PNG-encoded pairing QR code while a pairing is in
+// progress. It is nil before the first code is generated and after pairing
+// succeeds, at which point the QR image endpoint responds 404.
+var (
+	qrImageMu  sync.Mutex
+	qrImagePNG []byte
+)
+
+func setQRImage(png []byte) {
+	qrImageMu.Lock()
+	defer qrImageMu.Unlock()
+	qrImagePNG = png
+}
+
+// startQRImageServer starts a small, dedicated HTTP server that serves the
+// current pairing QR code as a PNG image, so it can be scanned from a proper
+// image instead of the ASCII-art QR code printed to the log (which is often
+// unreadable in a browser-based log viewer). It's separate from the main
+// REST API server both because that one only starts after a successful
+// connection (too late to help with pairing) and to avoid exposing the
+// unauthenticated /api/send and /api/download endpoints on a published port.
+func startQRImageServer() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/qr.png", func(w http.ResponseWriter, r *http.Request) {
+		if token := qrToken(); token != "" {
+			provided := r.URL.Query().Get("token")
+			if provided == "" {
+				if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+					provided = strings.TrimPrefix(auth, "Bearer ")
+				}
+			}
+			if provided != token {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+
+		qrImageMu.Lock()
+		png := qrImagePNG
+		qrImageMu.Unlock()
+
+		if png == nil {
+			http.Error(w, "No pairing QR code is currently active (already paired, or not generated yet)", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(png)
+	})
+
+	addr := fmt.Sprintf(":%d", qrPort())
+	go func() {
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			fmt.Printf("QR image server error: %v\n", err)
+		}
+	}()
 }
 
 // Message represents a chat message for our client
@@ -814,6 +892,11 @@ func main() {
 	logger := waLog.Stdout("Client", "INFO", true)
 	logger.Infof("Starting WhatsApp client...")
 
+	// Start the QR image server immediately so a scannable image is
+	// available for the whole time a pairing QR code might be shown below,
+	// not just once the main REST API comes up after connecting.
+	startQRImageServer()
+
 	// Create database connection for storing session data
 	dbLog := waLog.Stdout("Database", "INFO", true)
 
@@ -894,7 +977,19 @@ func main() {
 			if evt.Event == "code" {
 				fmt.Println("\nScan this QR code with your WhatsApp app:")
 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
+
+				if code, err := qr.Encode(evt.Code, qr.M); err == nil {
+					setQRImage(code.PNG())
+					tokenHint := ""
+					if qrToken() != "" {
+						tokenHint = "?token=<mcp_auth_token>"
+					}
+					fmt.Printf("\nIf the QR code above doesn't render properly (e.g. in a browser-based log viewer), open http://<home-assistant-host>:%d/qr.png%s in a browser for a scannable image instead.\n", qrPort(), tokenHint)
+				} else {
+					logger.Warnf("Failed to render QR code as PNG: %v", err)
+				}
 			} else if evt.Event == "success" {
+				setQRImage(nil)
 				connected <- true
 				break
 			}

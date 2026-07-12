@@ -3,8 +3,11 @@ configuration:
     name: MCP auth token
     description: >-
       Bearer token that MCP clients must send as "Authorization: Bearer <token>"
-      to use the WhatsApp MCP server. Strongly recommended - without it, anyone
-      who can reach this app's port on your network can read and send WhatsApp
-      messages through it. Leave empty only if you fully trust your network.
+      to use the WhatsApp MCP server. Also gates the pairing QR code image
+      (as a "?token=" query parameter). Strongly recommended - without it,
+      anyone who can reach this app's ports on your network can read and
+      send WhatsApp messages through it, and can load the pairing QR code
+      while it's active. Leave empty only if you fully trust your network.
 network:
   8081/tcp: MCP server (streamable-http)
+  8082/tcp: Pairing QR code image
