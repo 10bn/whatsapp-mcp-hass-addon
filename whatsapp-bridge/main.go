@@ -126,6 +126,7 @@ func startQRImageServer() {
 
 	addr := fmt.Sprintf(":%d", qrPort())
 	go func() {
+		fmt.Printf("QR image server listening on %s\n", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			fmt.Printf("QR image server error: %v\n", err)
 		}
@@ -982,9 +983,11 @@ func main() {
 					setQRImage(code.PNG())
 					tokenHint := ""
 					if qrToken() != "" {
-						tokenHint = "?token=<mcp_auth_token>"
+						tokenHint = "?token=YOUR_MCP_AUTH_TOKEN"
 					}
-					fmt.Printf("\nIf the QR code above doesn't render properly (e.g. in a browser-based log viewer), open http://<home-assistant-host>:%d/qr.png%s in a browser for a scannable image instead.\n", qrPort(), tokenHint)
+					fmt.Printf("\nIf the QR code above doesn't render properly (e.g. in a browser-based log viewer), a scannable image is being served on port %d.\n", qrPort())
+					fmt.Printf("In a browser, go to the SAME address/IP you use to open Home Assistant itself, but with port %d instead of Home Assistant's port, and add the path /qr.png%s\n", qrPort(), tokenHint)
+					fmt.Printf("Example: if Home Assistant is at http://192.168.1.50:8123, open http://192.168.1.50:%d/qr.png%s\n", qrPort(), tokenHint)
 				} else {
 					logger.Warnf("Failed to render QR code as PNG: %v", err)
 				}

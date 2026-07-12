@@ -31,12 +31,16 @@ started.
    **Settings > Linked Devices**. You have about 3 minutes before the QR
    code expires; restart the app to get a new one if it does.
    If the ASCII QR code in the log is hard to scan (common in browser-based
-   log viewers), open `http://<home-assistant-host>:8082/qr.png` instead -
-   add `?token=<mcp_auth_token>` to the URL if you set that option. This
-   only responds while a pairing QR is active; it 404s once you're paired.
-5. Once paired, point your MCP client at:
-   `http://<home-assistant-host>:8081/mcp`
-   with header `Authorization: Bearer <mcp_auth_token>`.
+   log viewers), open a scannable image instead: in a browser, go to the
+   *same address/IP you use for Home Assistant itself*, but with port 8082
+   instead, and add `/qr.png` to the path - e.g. if Home Assistant is at
+   `http://192.168.1.50:8123`, open `http://192.168.1.50:8082/qr.png`. Add
+   `?token=<mcp_auth_token>` to that URL if you set the option. This only
+   responds while a pairing QR is active; it 404s once you're paired.
+5. Once paired, point your MCP client at port 8081 instead (again, same
+   host/IP as Home Assistant, different port) - e.g.
+   `http://192.168.1.50:8081/mcp` - with header
+   `Authorization: Bearer <mcp_auth_token>`.
 
 Re-authentication is only needed if you unlink the device from WhatsApp, or
 after roughly 20 days of the app not running - not on every restart, since

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.1
+
+- Fix confusing QR-image instructions: the log/docs literally printed
+  `http://<home-assistant-host>:8082/qr.png`, which reads like a real
+  (broken) URL rather than a placeholder to substitute, and users
+  reasonably tried to open it verbatim. Replaced with explicit
+  instructions to reuse the same host/IP as the Home Assistant UI on a
+  different port, plus a concrete worked example
+  (`http://192.168.1.50:8082/qr.png`), in the bridge's log output, the
+  README, and DOCS.md.
+- Log a confirmation line when the QR image server starts listening, to
+  make it easier to tell "not reachable" apart from "never started".
+
 ## 1.1.0
 
 - Serve the WhatsApp pairing QR code as a proper PNG image

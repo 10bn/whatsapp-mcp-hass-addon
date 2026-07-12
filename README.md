@@ -22,8 +22,8 @@ This is a fork of [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-m
 
 1. Click the badge above (or add `https://github.com/10bn/whatsapp-mcp-hass-addon` as a repository under Settings > Add-ons > App store > ⋮ > Repositories).
 2. Install the **WhatsApp MCP** app, set the `mcp_auth_token` option, then start it.
-3. Open the app's **Log** tab and scan the QR code with WhatsApp on your phone (Settings > Linked Devices). If the QR code doesn't render cleanly in the log viewer, open `http://<home-assistant-host>:8082/qr.png` (add `?token=<mcp_auth_token>` if set) for a proper scannable image.
-4. Point your MCP client at `http://<home-assistant-host>:8081/mcp` with header `Authorization: Bearer <mcp_auth_token>`.
+3. Open the app's **Log** tab and scan the QR code with WhatsApp on your phone (Settings > Linked Devices). If the QR code doesn't render cleanly in the log viewer, open a proper scannable image instead: use the *same host/IP you use for Home Assistant*, but port 8082 and path `/qr.png` - e.g. if Home Assistant is at `http://192.168.1.50:8123`, open `http://192.168.1.50:8082/qr.png` (add `?token=<mcp_auth_token>` if set).
+4. Point your MCP client at the same host, port 8081 - e.g. `http://192.168.1.50:8081/mcp` - with header `Authorization: Bearer <mcp_auth_token>`.
 
 Full options reference, security notes, and troubleshooting: see [DOCS.md](./DOCS.md).
 

@@ -24,9 +24,11 @@ cd /app/whatsapp-bridge || bashio::exit.nok "Could not change to /app/whatsapp-b
 
 bashio::log.info "Starting WhatsApp bridge..."
 bashio::log.info "If this is the first run, a QR code will appear below - scan it with the WhatsApp app on your phone (Settings > Linked Devices)."
-bashio::log.info "If the QR code doesn't render properly in this log viewer, a scannable image is served at http://<home-assistant-host>:8082/qr.png while pairing is in progress."
+bashio::log.info "If the QR code doesn't render properly in this log viewer: in a browser, go to the SAME address/IP you use for Home Assistant itself, but with port 8082 instead, then add /qr.png to the path. Example: if Home Assistant is at http://192.168.1.50:8123, open http://192.168.1.50:8082/qr.png. This only works while pairing is in progress."
 if [ -z "${mcp_auth_token}" ]; then
     bashio::log.warning "mcp_auth_token is not set, so the QR image endpoint above is unauthenticated while pairing - anyone on your network could load it during that window."
+else
+    bashio::log.info "Since mcp_auth_token is set, add ?token=YOUR_MCP_AUTH_TOKEN to the QR image URL above."
 fi
 
 exec ./whatsapp-bridge
