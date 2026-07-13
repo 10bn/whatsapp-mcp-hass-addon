@@ -252,36 +252,71 @@ def download_media(message_id: str, chat_jid: str) -> Dict[str, Any]:
         }
 
 def _run_streamable_http() -> None:
-    """Run the server over streamable-http, optionally gated by a bearer token.
+    """Run the server over streamable-http, gated by a shared secret.
 
-    A stdio MCP server is only reachable by a process that spawns it locally.
-    Once exposed over the network (e.g. as a Home Assistant app service) it
-    becomes reachable by anything on the LAN unless we require a token.
+    A stdio MCP server is only reachable by a process that spawns it
+    locally. Once exposed over the network (e.g. as a Home Assistant app
+    service) it becomes reachable by anything on the LAN unless we require a
+    secret. The secret itself is resolved and persisted by the app's run
+    script (see rootfs/etc/services.d/), not here - this just enforces it.
+
+    Two equivalent ways to authenticate:
+      - POST/GET/DELETE /mcp                with header Authorization: Bearer <secret>
+      - POST/GET/DELETE /private_<secret>    no header needed, the URL itself
+        is the credential (same idea as Home Assistant's own
+        /api/webhook/<id> URLs) - for MCP clients that only accept a bare
+        URL and can't set custom headers.
+    An invalid /private_<token> gets a plain 404, not a 401, so it doesn't
+    even reveal that the path is meaningful.
     """
+    import hmac
     import uvicorn
-    from starlette.applications import Starlette
-    from starlette.middleware import Middleware
-    from starlette.middleware.base import BaseHTTPMiddleware
-    from starlette.requests import Request
     from starlette.responses import JSONResponse
 
     auth_token = os.environ.get("MCP_AUTH_TOKEN", "").strip()
+    mcp_path = mcp.settings.streamable_http_path
+    inner_app = mcp.streamable_http_app()
 
-    class BearerAuthMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):
-            expected = f"Bearer {auth_token}"
-            if request.headers.get("authorization") != expected:
-                return JSONResponse({"error": "Unauthorized"}, status_code=401)
-            return await call_next(request)
+    def valid(candidate: str, expected: str) -> bool:
+        return hmac.compare_digest(candidate.encode(), expected.encode())
 
-    app: Starlette = mcp.streamable_http_app()
-    if auth_token:
-        app.add_middleware(BearerAuthMiddleware)
-    else:
+    if not auth_token:
         print(
-            "WARNING: MCP_AUTH_TOKEN is not set. The WhatsApp MCP server is "
-            "reachable by anyone who can reach this port on the network, "
-            "without authentication.",
+            "WARNING: no MCP auth secret is configured. The WhatsApp MCP "
+            "server is reachable by anyone who can reach this port on the "
+            "network, without authentication.",
+            flush=True,
+        )
+        app = inner_app
+    else:
+        async def app(scope, receive, send):
+            if scope["type"] != "http":
+                await inner_app(scope, receive, send)
+                return
+
+            path = scope["path"]
+            if path.startswith("/private_"):
+                candidate = path[len("/private_"):]
+                if not valid(candidate, auth_token):
+                    response = JSONResponse({"error": "Not Found"}, status_code=404)
+                    await response(scope, receive, send)
+                    return
+                scope = {**scope, "path": mcp_path, "raw_path": mcp_path.encode()}
+            elif path == mcp_path:
+                headers = dict(scope.get("headers") or [])
+                provided = headers.get(b"authorization", b"").decode()
+                if not valid(provided, f"Bearer {auth_token}"):
+                    response = JSONResponse({"error": "Unauthorized"}, status_code=401)
+                    await response(scope, receive, send)
+                    return
+
+            await inner_app(scope, receive, send)
+
+        public_port = os.environ.get("MCP_PUBLIC_PORT", str(mcp.settings.port))
+        print(f"No-header MCP URL: http://<home-assistant-host>:{public_port}/private_{auth_token}", flush=True)
+        print(
+            "Replace <home-assistant-host> with the same host/IP you use for "
+            "Home Assistant itself.",
             flush=True,
         )
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
@@ -73,6 +74,13 @@ func qrToken() string {
 	return os.Getenv("WHATSAPP_QR_TOKEN")
 }
 
+// validToken compares a request-supplied token against the expected one in
+// constant time, guarding against timing attacks that could otherwise leak
+// the secret one byte at a time.
+func validToken(candidate, expected string) bool {
+	return subtle.ConstantTimeCompare([]byte(candidate), []byte(expected)) == 1
+}
+
 // currentQRPNG holds the PNG-encoded pairing QR code while a pairing is in
 // progress. It is nil before the first code is generated and after pairing
 // succeeds, at which point the QR image endpoint responds 404.
@@ -104,8 +112,10 @@ func startQRImageServer() {
 					provided = strings.TrimPrefix(auth, "Bearer ")
 				}
 			}
-			if provided != token {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			// A plain 404 (not 401) here doesn't confirm to an
+			// unauthenticated prober that this path is meaningful.
+			if !validToken(provided, token) {
+				http.Error(w, "404 page not found", http.StatusNotFound)
 				return
 			}
 		}
@@ -981,13 +991,7 @@ func main() {
 
 				if code, err := qr.Encode(evt.Code, qr.M); err == nil {
 					setQRImage(code.PNG())
-					tokenHint := ""
-					if qrToken() != "" {
-						tokenHint = "?token=YOUR_MCP_AUTH_TOKEN"
-					}
-					fmt.Printf("\nIf the QR code above doesn't render properly (e.g. in a browser-based log viewer), a scannable image is being served on port %d.\n", qrPort())
-					fmt.Printf("In a browser, go to the SAME address/IP you use to open Home Assistant itself, but with port %d instead of Home Assistant's port, and add the path /qr.png%s\n", qrPort(), tokenHint)
-					fmt.Printf("Example: if Home Assistant is at http://192.168.1.50:8123, open http://192.168.1.50:%d/qr.png%s\n", qrPort(), tokenHint)
+					fmt.Println("\nIf the QR code above doesn't render properly (e.g. in a browser-based log viewer), see the ready-to-use URL logged above at startup for a scannable image instead.")
 				} else {
 					logger.Warnf("Failed to render QR code as PNG: %v", err)
 				}

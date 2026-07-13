@@ -24,23 +24,23 @@ started.
 1. Add this repository to your Home Assistant instance (Settings > Add-ons
    \> App store > ⋮ > Repositories), or use the badge in the main
    [README](./README.md).
-2. Install the "WhatsApp MCP" app.
-3. Set the `mcp_auth_token` option (see below) before starting the app.
-4. Start the app and open its **Log** tab. On first run a QR code is
-   printed there - scan it with WhatsApp on your phone under
-   **Settings > Linked Devices**. You have about 3 minutes before the QR
-   code expires; restart the app to get a new one if it does.
+2. Install the "WhatsApp MCP" app and start it - no configuration is
+   required to get a secured setup; see [Options](#options) below only if
+   you want a stable/fixed secret instead of the auto-generated one.
+3. Open the app's **Log** tab. On first run a QR code is printed there -
+   scan it with WhatsApp on your phone under **Settings > Linked Devices**.
+   You have about 3 minutes before the QR code expires; restart the app to
+   get a new one if it does.
    If the ASCII QR code in the log is hard to scan (common in browser-based
-   log viewers), open a scannable image instead: in a browser, go to the
-   *same address/IP you use for Home Assistant itself*, but with port 8082
-   instead, and add `/qr.png` to the path - e.g. if Home Assistant is at
-   `http://192.168.1.50:8123`, open `http://192.168.1.50:8082/qr.png`. Add
-   `?token=<mcp_auth_token>` to that URL if you set the option. This only
-   responds while a pairing QR is active; it 404s once you're paired.
-5. Once paired, point your MCP client at port 8081 instead (again, same
-   host/IP as Home Assistant, different port) - e.g.
-   `http://192.168.1.50:8081/mcp` - with header
-   `Authorization: Bearer <mcp_auth_token>`.
+   log viewers), the log also prints a ready-to-use URL for a scannable PNG
+   instead - copy it as-is, just replacing the host with your own Home
+   Assistant address. It only responds while a pairing QR is active; it
+   404s once you're paired (including for a *wrong* secret, so it never
+   confirms the endpoint exists to someone without it).
+4. Once paired, the log also prints a ready-to-use, no-header MCP URL - copy
+   it (with the host replaced) straight into your MCP client. See
+   [Connecting an MCP client](#connecting-an-mcp-client) for the header-based
+   alternative.
 
 Re-authentication is only needed if you unlink the device from WhatsApp, or
 after roughly 20 days of the app not running - not on every restart, since
@@ -48,35 +48,67 @@ session data persists on `/data`.
 
 ## Options
 
-### `mcp_auth_token` (optional, but strongly recommended)
+### Auto-generated secret (recommended: leave both options below empty)
 
-A bearer token that MCP clients must present to use the server:
+By default, the app generates a random 128-bit secret on first start and
+persists it under `/data` - it survives restarts and updates, and both the
+MCP server and the pairing QR image are gated by it. After starting the
+app, open its **Log** tab and look for a line like:
 
 ```
-Authorization: Bearer <mcp_auth_token>
+No-header MCP URL: http://<home-assistant-host>:8081/private_5iBENz4JEcUW2X-QGVUMQw
 ```
 
-If left empty, the MCP server starts anyway (a warning is logged), but
-**anyone who can reach port 8081 on your network can read your WhatsApp
-message history and send messages as you** - there is no other
-authentication layer. Set a long, random token and do not expose this port
-to the internet (e.g. via router port-forwarding).
+Copy that URL (with `<home-assistant-host>` replaced by your own address)
+straight into your MCP client - no header configuration needed.
+
+- `mcp_auth_token` (optional): pin a fixed secret instead of the
+  auto-generated one, e.g. if you want the URL to stay predictable across a
+  fresh install.
+- `disable_auth` (optional, default off): turns off the secret entirely,
+  making both the MCP server and the pairing QR image reachable by anyone
+  who can reach this app's ports on your network, with **no credential at
+  all**. Only turn this on if you fully trust your network.
+
+## Connecting an MCP client
+
+There are two equivalent ways to authenticate, depending on what your
+client supports - `8081` below is the app's default port; if you remapped
+it on the app's **Network** tab, use that port instead (also shown in the
+Log tab).
+
+**With a header** - point the client at the fixed path and send the secret
+as a bearer token:
+
+```
+http://<home-assistant-host>:8081/mcp
+Authorization: Bearer <secret>
+```
+
+**With a URL only** - no custom header required, the secret is embedded in
+the path instead (same idea as Home Assistant's own `/api/webhook/<id>`
+URLs). Use this for clients/tools that only let you paste in a URL:
+
+```
+http://<home-assistant-host>:8081/private_<secret>
+```
+
+An unknown secret on this path gets a plain `404` (it doesn't reveal that
+`/private_` is meaningful), so keep the full URL as secret as you would a
+password.
 
 ## Network / Security notes
 
 - Port **8081/tcp** (the MCP server) is a credential-bearing API: only
   reachable by devices/services you trust, ideally not exposed outside your
-  LAN, and always with `mcp_auth_token` set.
+  LAN. Secured by the shared secret above unless you set `disable_auth`.
 - Port **8082/tcp** (the pairing QR code image) is gated by the same
-  `mcp_auth_token`, passed as `?token=<mcp_auth_token>` in the URL. If you
-  leave `mcp_auth_token` empty, this endpoint is also unauthenticated for as
-  long as a pairing QR is active (a few minutes, typically only during first
-  setup) - anyone who can reach it on your network during that window could
-  load the QR code and potentially link their own device instead of yours.
-  This isn't materially different from the existing risk of anyone with
-  access to the app's Log tab seeing the same QR code as ASCII art; it just
-  widens *who* can see it, from "logged into Home Assistant" to "on your
-  LAN", while no token is set.
+  secret, passed as `?token=<secret>` in the URL (the log prints the full
+  URL for you). If `disable_auth` is set, this endpoint is also
+  unauthenticated for as long as a pairing QR is active (a few minutes,
+  typically only during first setup) - anyone who can reach it on your
+  network during that window could load the QR code and potentially link
+  their own device instead of yours.
 - Port 8080 (the Go bridge's internal REST API used for sending/downloading
   messages) is intentionally **not** exposed by this app - it has no
   authentication of its own and is only meant to be called by the MCP

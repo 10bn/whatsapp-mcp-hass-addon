@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/apps/configuration#app-configuration
 name: WhatsApp MCP
-version: "1.1.1"
+version: "1.2.0"
 slug: whatsapp_mcp
 description: MCP server for your personal WhatsApp account, backed by the WhatsApp web multidevice bridge
 url: "https://github.com/10bn/whatsapp-mcp-hass-addon"
@@ -17,9 +17,11 @@ ports:
   8081/tcp: 8081
   8082/tcp: 8082
 ports_description:
-  8081/tcp: WhatsApp MCP server (streamable-http). Set the mcp_auth_token option before exposing this port beyond localhost.
-  8082/tcp: WhatsApp pairing QR code image (only active while a QR is waiting to be scanned). Protected by the same mcp_auth_token.
+  8081/tcp: WhatsApp MCP server (streamable-http). Secured by an auto-generated secret unless disable_auth is set.
+  8082/tcp: WhatsApp pairing QR code image (only active while a QR is waiting to be scanned). Protected by the same secret.
 options:
   mcp_auth_token: ""
+  disable_auth: false
 schema:
   mcp_auth_token: "password?"
+  disable_auth: "bool"

@@ -25,19 +25,28 @@ if ! wait_for_bridge; then
     bashio::log.warning "Timed out waiting for the WhatsApp bridge on port 8080; starting the MCP server anyway."
 fi
 
-declare mcp_auth_token=""
-if bashio::config.has_value 'mcp_auth_token'; then
-    mcp_auth_token=$(bashio::config 'mcp_auth_token')
-else
-    bashio::log.warning "mcp_auth_token is not set. The WhatsApp MCP server will be reachable on the network without authentication. Set the mcp_auth_token option in the app configuration to secure it."
-fi
+source /etc/whatsapp-mcp/secret.sh
+declare shared_secret
+shared_secret="$(wait_for_shared_secret)"
 
 export WHATSAPP_MESSAGES_DB_PATH="/data/store/messages.db"
 export WHATSAPP_BRIDGE_URL="http://localhost:8080/api"
 export MCP_TRANSPORT="streamable-http"
 export MCP_HOST="0.0.0.0"
 export MCP_PORT="8081"
-export MCP_AUTH_TOKEN="${mcp_auth_token}"
+export MCP_AUTH_TOKEN="${shared_secret}"
+
+# Reflects any host port remapped on this app's Network tab, so the
+# no-header URL the Python process logs at startup is actually reachable.
+declare mcp_public_port
+mcp_public_port="$(bashio::addon.port 8081)"
+if bashio::var.has_value "${mcp_public_port}"; then
+    export MCP_PUBLIC_PORT="${mcp_public_port}"
+fi
+
+if [ -z "${shared_secret}" ]; then
+    bashio::log.warning "disable_auth is set. The WhatsApp MCP server will be reachable on the network without authentication."
+fi
 
 cd /app/whatsapp-mcp-server || bashio::exit.nok "Could not change to /app/whatsapp-mcp-server"
 

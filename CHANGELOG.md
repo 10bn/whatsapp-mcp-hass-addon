@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0
+
+- Secure by default, matching the pattern used in this author's other MCP
+  apps (e.g. `ssh-mcp-hass-addon`): the app now auto-generates a random
+  128-bit secret on first start and persists it under `/data`, instead of
+  starting fully open when `mcp_auth_token` is left empty. Both the MCP
+  server (8081) and the pairing QR image (8082) are gated by this shared
+  secret.
+- Add a `/private_<secret>` URL form for the MCP server, equivalent to the
+  existing `Authorization: Bearer <secret>` header, for MCP clients that
+  can only be pointed at a bare URL. An unknown secret on that path gets a
+  plain 404 rather than a 401, so it doesn't confirm the path is
+  meaningful.
+- Add a `disable_auth` option to explicitly opt back into the old
+  fully-open behavior, for users who want it on a fully trusted network.
+- Use constant-time comparison for all secret checks (Python
+  `hmac.compare_digest`, Go `crypto/subtle.ConstantTimeCompare`), and 404
+  (not 401) invalid QR-image tokens too, for consistency.
+- Both services' `run` scripts now log a ready-to-use URL (with the
+  resolved secret already filled in) for the MCP endpoint and the pairing
+  QR image, instead of the token being left as a placeholder.
+
 ## 1.1.1
 
 - Fix confusing QR-image instructions: the log/docs literally printed

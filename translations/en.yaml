@@ -1,13 +1,18 @@
 configuration:
   mcp_auth_token:
-    name: MCP auth token
+    name: MCP auth token (optional)
     description: >-
-      Bearer token that MCP clients must send as "Authorization: Bearer <token>"
-      to use the WhatsApp MCP server. Also gates the pairing QR code image
-      (as a "?token=" query parameter). Strongly recommended - without it,
-      anyone who can reach this app's ports on your network can read and
-      send WhatsApp messages through it, and can load the pairing QR code
-      while it's active. Leave empty only if you fully trust your network.
+      Pin a fixed secret for the MCP server and pairing QR image, instead of
+      the auto-generated one used by default. Leave empty unless you need a
+      stable, predictable value (e.g. across a fresh install).
+  disable_auth:
+    name: Disable authentication
+    description: >-
+      Turn off the secret entirely, making the MCP server and pairing QR
+      image reachable by anyone who can reach this app's ports on your
+      network, with no credential at all. Leave off unless you fully trust
+      your network - by default a secret is always required, either the
+      auto-generated one or the mcp_auth_token you pin above.
 network:
   8081/tcp: MCP server (streamable-http)
   8082/tcp: Pairing QR code image
