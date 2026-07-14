@@ -1,4 +1,6 @@
 import os
+from dataclasses import asdict, is_dataclass
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from mcp.server.fastmcp import FastMCP
 from whatsapp import (
@@ -13,7 +15,9 @@ from whatsapp import (
     send_message as whatsapp_send_message,
     send_file as whatsapp_send_file,
     send_audio_message as whatsapp_audio_voice_message,
-    download_media as whatsapp_download_media
+    download_media as whatsapp_download_media,
+    list_newsletters as whatsapp_list_newsletters,
+    unfollow_newsletter as whatsapp_unfollow_newsletter,
 )
 
 # Initialize FastMCP server
@@ -23,15 +27,39 @@ mcp = FastMCP(
     port=int(os.environ.get("MCP_PORT", "8081")),
 )
 
+
+def _jsonable(value: Any) -> Any:
+    """Recursively convert dataclasses (Chat, Contact, Message, MessageContext,
+    ...) and datetimes into the plain dicts/strings the declared tool output
+    schemas promise. Without this, FastMCP's output validation rejects a
+    dataclass instance where a dict is expected.
+    """
+    if is_dataclass(value) and not isinstance(value, type):
+        return {k: _jsonable(v) for k, v in asdict(value).items()}
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    return value
+
+
+def _chat_to_dict(chat) -> Dict[str, Any]:
+    d = _jsonable(chat)
+    d["is_group"] = chat.is_group
+    return d
+
+
 @mcp.tool()
 def search_contacts(query: str) -> List[Dict[str, Any]]:
     """Search WhatsApp contacts by name or phone number.
-    
+
     Args:
         query: Search term to match against contact names or phone numbers
     """
     contacts = whatsapp_search_contacts(query)
-    return contacts
+    return [_jsonable(c) for c in contacts]
 
 @mcp.tool()
 def list_messages(
@@ -72,7 +100,7 @@ def list_messages(
         context_before=context_before,
         context_after=context_after
     )
-    return messages
+    return [_jsonable(m) for m in messages]
 
 @mcp.tool()
 def list_chats(
@@ -98,40 +126,40 @@ def list_chats(
         include_last_message=include_last_message,
         sort_by=sort_by
     )
-    return chats
+    return [_chat_to_dict(c) for c in chats]
 
 @mcp.tool()
-def get_chat(chat_jid: str, include_last_message: bool = True) -> Dict[str, Any]:
+def get_chat(chat_jid: str, include_last_message: bool = True) -> Optional[Dict[str, Any]]:
     """Get WhatsApp chat metadata by JID.
-    
+
     Args:
         chat_jid: The JID of the chat to retrieve
         include_last_message: Whether to include the last message (default True)
     """
     chat = whatsapp_get_chat(chat_jid, include_last_message)
-    return chat
+    return _chat_to_dict(chat) if chat else None
 
 @mcp.tool()
-def get_direct_chat_by_contact(sender_phone_number: str) -> Dict[str, Any]:
+def get_direct_chat_by_contact(sender_phone_number: str) -> Optional[Dict[str, Any]]:
     """Get WhatsApp chat metadata by sender phone number.
-    
+
     Args:
         sender_phone_number: The phone number to search for
     """
     chat = whatsapp_get_direct_chat_by_contact(sender_phone_number)
-    return chat
+    return _chat_to_dict(chat) if chat else None
 
 @mcp.tool()
 def get_contact_chats(jid: str, limit: int = 20, page: int = 0) -> List[Dict[str, Any]]:
     """Get all WhatsApp chats involving the contact.
-    
+
     Args:
         jid: The contact's JID to search for
         limit: Maximum number of chats to return (default 20)
         page: Page number for pagination (default 0)
     """
     chats = whatsapp_get_contact_chats(jid, limit, page)
-    return chats
+    return [_chat_to_dict(c) for c in chats]
 
 @mcp.tool()
 def get_last_interaction(jid: str) -> str:
@@ -157,7 +185,7 @@ def get_message_context(
         after: Number of messages to include after the target message (default 5)
     """
     context = whatsapp_get_message_context(message_id, before, after)
-    return context
+    return _jsonable(context)
 
 @mcp.tool()
 def send_message(
@@ -250,6 +278,32 @@ def download_media(message_id: str, chat_jid: str) -> Dict[str, Any]:
             "success": False,
             "message": "Failed to download media"
         }
+
+@mcp.tool()
+def list_newsletters() -> List[Dict[str, Any]]:
+    """List the WhatsApp channels/newsletters this account is subscribed to.
+
+    Returns:
+        A list of newsletters, each with jid, name and subscriber_count. Pass
+        a jid to unfollow_newsletter to unsubscribe from it.
+    """
+    return whatsapp_list_newsletters()
+
+@mcp.tool()
+def unfollow_newsletter(channel_jid: str) -> Dict[str, Any]:
+    """Unfollow (unsubscribe from) a WhatsApp channel/newsletter. Use list_newsletters first to find the jid.
+
+    Args:
+        channel_jid: The JID of the channel/newsletter to unfollow (from list_newsletters)
+
+    Returns:
+        A dictionary containing success status and a status message
+    """
+    success, status_message = whatsapp_unfollow_newsletter(channel_jid)
+    return {
+        "success": success,
+        "message": status_message
+    }
 
 def _run_streamable_http() -> None:
     """Run the server over streamable-http, gated by a shared secret.

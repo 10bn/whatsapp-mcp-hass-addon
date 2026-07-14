@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.0
+
+- Fix a pre-existing bug (inherited from upstream, not introduced by the app
+  packaging) where several MCP tools returned data that didn't match their
+  declared output schema, causing FastMCP/pydantic to reject the response
+  outright: `list_chats`, `search_contacts`, `get_chat`,
+  `get_direct_chat_by_contact`, and `get_contact_chats` returned raw
+  dataclass instances where a plain dict was declared; `list_messages`
+  returned a single pre-formatted string where a list of message objects
+  was declared (and expected). Added a `_jsonable()` converter in
+  `main.py` and made `whatsapp.list_messages()` actually return structured
+  `Message` objects; removed the now-dead `format_messages_list()`.
+- Fix a related, separately-discovered bug affecting stdio transport
+  (Claude Desktop/Cursor usage): several error-handling paths in
+  `whatsapp.py` called `print()`, which writes to stdout - the same stream
+  the stdio MCP transport uses for the JSON-RPC protocol, so any error
+  during a tool call could corrupt the connection. Redirected all of them
+  to stderr.
+- Add `list_newsletters` and `unfollow_newsletter` MCP tools, backed by
+  whatsmeow's `GetSubscribedNewsletters`/`UnfollowNewsletter` APIs via two
+  new bridge REST endpoints (`GET /api/newsletters`,
+  `POST /api/newsletter/unfollow`), so channels/newsletters can be listed
+  and unsubscribed from directly.
+
 ## 1.2.0
 
 - Secure by default, matching the pattern used in this author's other MCP

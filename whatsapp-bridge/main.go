@@ -596,6 +596,24 @@ type DownloadMediaResponse struct {
 	Path     string `json:"path,omitempty"`
 }
 
+// NewsletterInfo represents a subscribed WhatsApp channel/newsletter
+type NewsletterInfo struct {
+	JID             string `json:"jid"`
+	Name            string `json:"name"`
+	SubscriberCount int    `json:"subscriber_count"`
+}
+
+// UnfollowNewsletterRequest represents the request body for the unfollow newsletter API
+type UnfollowNewsletterRequest struct {
+	JID string `json:"jid"`
+}
+
+// UnfollowNewsletterResponse represents the response for the unfollow newsletter API
+type UnfollowNewsletterResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
 // Store additional media info in the database
 func (store *MessageStore) StoreMediaInfo(id, chatJID, url string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64) error {
 	_, err := store.db.Exec(
@@ -883,6 +901,77 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 			Message:  fmt.Sprintf("Successfully downloaded %s media", mediaType),
 			Filename: filename,
 			Path:     path,
+		})
+	})
+
+	// Handler for listing subscribed newsletters (channels)
+	http.HandleFunc("/api/newsletters", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		newsletters, err := client.GetSubscribedNewsletters(context.Background())
+		w.Header().Set("Content-Type", "application/json")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Failed to list newsletters: %v", err)})
+			return
+		}
+
+		result := make([]NewsletterInfo, 0, len(newsletters))
+		for _, n := range newsletters {
+			result = append(result, NewsletterInfo{
+				JID:             n.ID.String(),
+				Name:            n.ThreadMeta.Name.Text,
+				SubscriberCount: n.ThreadMeta.SubscriberCount,
+			})
+		}
+		json.NewEncoder(w).Encode(result)
+	})
+
+	// Handler for unfollowing a newsletter (channel)
+	http.HandleFunc("/api/newsletter/unfollow", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req UnfollowNewsletterRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request format", http.StatusBadRequest)
+			return
+		}
+
+		if req.JID == "" {
+			http.Error(w, "JID is required", http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		jid, err := types.ParseJID(req.JID)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(UnfollowNewsletterResponse{
+				Success: false,
+				Message: fmt.Sprintf("Invalid JID: %v", err),
+			})
+			return
+		}
+
+		if err := client.UnfollowNewsletter(context.Background(), jid); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(UnfollowNewsletterResponse{
+				Success: false,
+				Message: fmt.Sprintf("Failed to unfollow newsletter: %v", err),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(UnfollowNewsletterResponse{
+			Success: true,
+			Message: "Unfollowed newsletter",
 		})
 	})
 

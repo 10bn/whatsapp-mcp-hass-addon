@@ -155,6 +155,8 @@ Claude can access the following tools to interact with WhatsApp:
 - **send_file**: Send a file (image, video, raw audio, document) to a specified recipient
 - **send_audio_message**: Send an audio file as a WhatsApp voice message (requires the file to be an .ogg opus file or ffmpeg must be installed)
 - **download_media**: Download media from a WhatsApp message and get the local file path
+- **list_newsletters**: List the WhatsApp channels/newsletters this account is subscribed to
+- **unfollow_newsletter**: Unfollow (unsubscribe from) a WhatsApp channel/newsletter
 
 ### Media Handling Features
 
