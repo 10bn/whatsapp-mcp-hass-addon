@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.1
+
+- Fix slow/hanging queries on broad message sweeps (e.g. "summarize the
+  last 60 days"): the `messages` table had no indexes beyond its primary
+  key (`id, chat_jid`), so every `list_messages`/`get_message_context`
+  query - which filters/sorts by `timestamp` and filters by `chat_jid`/
+  `sender` - was a full table scan plus an in-memory sort, worsening as
+  history grows. Added indexes on `messages(timestamp)`,
+  `messages(chat_jid, timestamp)`, and `messages(sender)`. Verified with a
+  60k-row synthetic dataset: the query plan changes from `SCAN messages` +
+  `USE TEMP B-TREE FOR ORDER BY` to an indexed range search, ~280x faster
+  in that test (0.028s -> 0.0001s).
+- Enable SQLite WAL mode (plus a 5s busy timeout) on the bridge's message
+  database, so the MCP server's long reads don't contend for the same lock
+  as the bridge's own continuous writes (new incoming messages).
+
 ## 1.3.0
 
 - Fix a pre-existing bug (inherited from upstream, not introduced by the app

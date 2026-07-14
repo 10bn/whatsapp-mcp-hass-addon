@@ -165,8 +165,12 @@ func NewMessageStore() (*MessageStore, error) {
 		return nil, fmt.Errorf("failed to create store directory: %v", err)
 	}
 
-	// Open SQLite database for messages
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s/messages.db?_foreign_keys=on", storeDir()))
+	// Open SQLite database for messages. WAL mode lets the MCP server's reads
+	// (often long table scans over months of history) run concurrently with
+	// this process's own writes (new incoming messages), instead of
+	// contending for the same lock; busy_timeout makes either side wait
+	// briefly under contention instead of failing outright.
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s/messages.db?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000", storeDir()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open message database: %v", err)
 	}
@@ -178,7 +182,7 @@ func NewMessageStore() (*MessageStore, error) {
 			name TEXT,
 			last_message_time TIMESTAMP
 		);
-		
+
 		CREATE TABLE IF NOT EXISTS messages (
 			id TEXT,
 			chat_jid TEXT,
@@ -196,6 +200,14 @@ func NewMessageStore() (*MessageStore, error) {
 			PRIMARY KEY (id, chat_jid),
 			FOREIGN KEY (chat_jid) REFERENCES chats(jid)
 		);
+
+		-- The MCP server's list_messages/get_message_context queries filter
+		-- and sort by timestamp (often over weeks/months of history) and
+		-- filter by chat_jid/sender; without these, every such query is a
+		-- full table scan, which gets slower as history grows.
+		CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
+		CREATE INDEX IF NOT EXISTS idx_messages_chat_jid_timestamp ON messages(chat_jid, timestamp);
+		CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender);
 	`)
 	if err != nil {
 		db.Close()
